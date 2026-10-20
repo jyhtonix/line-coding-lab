@@ -1,0 +1,691 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Line Coding Lab: data rate, signal elements and baud rate</title>
+<style>
+:root{
+  box-sizing:border-box;
+  padding-top:env(safe-area-inset-top,0px);
+  padding-bottom:env(safe-area-inset-bottom,0px);
+  --bg:#eef2f6;
+  --surface:#ffffff;
+  --surface2:#f5f8fb;
+  --border:#d3dce6;
+  --text:#14212e;
+  --muted:#586b7d;
+  --accent:#0b5fa5;
+  --accent-soft:#dcebf8;
+  --accent-ink:#ffffff;
+  --trace:#0b5fa5;
+  --grid:#d9e2ec;
+  --grid-strong:#aebdcc;
+  --hl:#f2a900;
+  --good:#17703e;
+  --bad:#b3261e;
+  --bad-soft:#fbe6e4;
+  --pos:#0b5fa5;
+  --neg:#b4472a;
+  --zero:#586b7d;
+  --shadow:0 1px 2px rgba(20,33,46,.06);
+}
+@media (prefers-color-scheme: dark){
+  :root:not([data-theme="light"]){
+    --bg:#0d1620;--surface:#14212d;--surface2:#101b26;--border:#263748;
+    --text:#e3ecf4;--muted:#93a7b9;--accent:#5bb4f0;--accent-soft:#1a3a54;--accent-ink:#06121c;
+    --trace:#5bd6c4;--grid:#1d2e3d;--grid-strong:#35506a;--hl:#ffc233;
+    --good:#52c785;--bad:#ff8a80;--bad-soft:#3a1d1b;--pos:#5bb4f0;--neg:#ff9b78;--zero:#93a7b9;
+    --shadow:none;
+  }
+}
+:root[data-theme="dark"]{
+  --bg:#0d1620;--surface:#14212d;--surface2:#101b26;--border:#263748;
+  --text:#e3ecf4;--muted:#93a7b9;--accent:#5bb4f0;--accent-soft:#1a3a54;--accent-ink:#06121c;
+  --trace:#5bd6c4;--grid:#1d2e3d;--grid-strong:#35506a;--hl:#ffc233;
+  --good:#52c785;--bad:#ff8a80;--bad-soft:#3a1d1b;--pos:#5bb4f0;--neg:#ff9b78;--zero:#93a7b9;
+  --shadow:none;
+}
+*,*::before,*::after{box-sizing:inherit}
+html{height:100%;scroll-padding-top:env(safe-area-inset-top,0px)}
+body{
+  margin:0;background:var(--bg);color:var(--text);
+  font:16px/1.55 "Avenir Next","Segoe UI",system-ui,-apple-system,Roboto,sans-serif;
+  -webkit-text-size-adjust:100%;
+}
+.mono{font-family:ui-monospace,"SF Mono","Cascadia Mono",Menlo,Consolas,monospace}
+.wrap{max-width:1120px;margin:0 auto;padding:22px 16px 56px}
+h1{font:700 clamp(1.6rem,4vw,2.2rem)/1.15 "Avenir Next","Segoe UI",system-ui,sans-serif;margin:0 0 6px;letter-spacing:-.01em}
+.lede{margin:0 0 20px;color:var(--muted);max-width:68ch}
+h2{font-size:1.05rem;margin:0 0 12px;font-weight:650}
+h3{font-size:.98rem;margin:0 0 6px;font-weight:650}
+.card{background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:18px;box-shadow:var(--shadow);margin-bottom:16px}
+label,.lbl{display:block;font-size:.88rem;font-weight:600;margin-bottom:6px}
+.hint{font-size:.82rem;color:var(--muted);font-weight:400}
+
+/* encoding picker */
+.enc-row{display:flex;flex-wrap:wrap;gap:8px}
+.enc{
+  appearance:none;border:1px solid var(--border);background:var(--surface2);color:var(--text);
+  padding:9px 14px;border-radius:999px;font:inherit;font-size:.92rem;font-weight:600;cursor:pointer;
+}
+.enc:hover{border-color:var(--accent)}
+.enc[aria-pressed="true"]{background:var(--accent);color:var(--accent-ink);border-color:var(--accent)}
+:focus-visible{outline:3px solid var(--hl);outline-offset:2px}
+
+.inputs{display:grid;grid-template-columns:1.6fr 1fr;gap:16px;margin-top:18px}
+@media (max-width:720px){.inputs{grid-template-columns:1fr}}
+input[type=text],input[type=number],select{
+  width:100%;font:inherit;font-size:1.05rem;padding:10px 12px;border-radius:8px;
+  border:1px solid var(--border);background:var(--surface2);color:var(--text);
+}
+input[type=text]{font-family:ui-monospace,"SF Mono","Cascadia Mono",Menlo,Consolas,monospace;letter-spacing:.12em}
+input.invalid{border-color:var(--bad);background:var(--bad-soft)}
+.time-row{display:flex;gap:8px}
+.time-row input{flex:1.4}.time-row select{flex:1}
+.chips{display:flex;flex-wrap:wrap;gap:6px;margin-top:8px;align-items:center}
+.chip{
+  appearance:none;border:1px dashed var(--grid-strong);background:transparent;color:var(--muted);
+  border-radius:6px;padding:3px 9px;font:inherit;font-size:.82rem;cursor:pointer;
+  font-family:ui-monospace,Menlo,Consolas,monospace;
+}
+.chip:hover{color:var(--accent);border-color:var(--accent)}
+.err{color:var(--bad);font-size:.88rem;margin-top:6px;min-height:1.3em}
+.opts{display:flex;flex-wrap:wrap;gap:18px;margin-top:14px;padding-top:14px;border-top:1px solid var(--border)}
+.opt{min-width:210px;flex:1}
+.seg{display:inline-flex;border:1px solid var(--border);border-radius:8px;overflow:hidden}
+.seg button{
+  appearance:none;border:0;background:var(--surface2);color:var(--text);padding:7px 12px;font:inherit;font-size:.86rem;cursor:pointer;
+}
+.seg button+button{border-left:1px solid var(--border)}
+.seg button[aria-pressed="true"]{background:var(--accent-soft);color:var(--accent);font-weight:700}
+.opt[hidden]{display:none}
+
+/* stat cards */
+.stats{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:12px;margin-bottom:16px}
+.stat{background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:14px 16px;box-shadow:var(--shadow)}
+.stat .name{font-size:.88rem;color:var(--muted);font-weight:600}
+.stat .big{font-size:2.1rem;font-weight:750;line-height:1.15;margin:2px 0;font-variant-numeric:tabular-nums;word-break:break-word}
+.stat .big small{font-size:1rem;font-weight:600;color:var(--muted);margin-left:4px}
+.stat .sub{font-size:.84rem;color:var(--muted)}
+.stat.r{border-top:4px solid var(--accent)}
+.stat.e{border-top:4px solid var(--neg)}
+.stat.d{border-top:4px solid var(--good)}
+
+/* plot */
+.plot-card{padding:14px 14px 10px}
+.plot-scroll{
+  overflow-x:auto;border:1px solid var(--border);border-radius:8px;background:var(--surface2);
+  background-image:
+    linear-gradient(var(--grid) 1px,transparent 1px),
+    linear-gradient(90deg,var(--grid) 1px,transparent 1px);
+  background-size:20px 20px;
+}
+.plot-scroll svg{display:block}
+svg text{font-family:ui-monospace,"SF Mono","Cascadia Mono",Menlo,Consolas,monospace;fill:var(--text)}
+svg .muted{fill:var(--muted)}
+svg .trace{fill:none;stroke:var(--trace);stroke-width:3;stroke-linejoin:miter;stroke-linecap:butt}
+svg .hlrect{fill:var(--hl);opacity:0;transition:opacity .12s}
+svg .hlrect.on{opacity:.22}
+svg .bl{stroke:var(--grid-strong);stroke-width:1}
+svg .el{stroke:var(--grid-strong);stroke-width:1;stroke-dasharray:3 4;opacity:.8}
+svg .lvl{stroke:var(--grid-strong);stroke-width:1;stroke-dasharray:2 5}
+svg .axis{stroke:var(--muted);stroke-width:1.2}
+.caption{font-size:.88rem;color:var(--muted);margin:10px 2px 2px}
+.empty{padding:30px 16px;text-align:center;color:var(--muted)}
+
+/* steps */
+.step{display:flex;gap:14px;padding:14px 0;border-top:1px solid var(--border)}
+.step:first-of-type{border-top:0;padding-top:0}
+.sn{
+  flex:0 0 30px;height:30px;border-radius:50%;background:var(--accent-soft);color:var(--accent);
+  display:grid;place-items:center;font-weight:700;font-size:.9rem;
+}
+.sb{flex:1;min-width:0}
+.row{display:grid;grid-template-columns:104px 1fr;gap:10px;padding:4px 0;align-items:baseline}
+@media (max-width:560px){.row{grid-template-columns:1fr;gap:0}}
+.row .k{font-size:.82rem;color:var(--muted);font-weight:600}
+.row .v{font-family:ui-monospace,"SF Mono","Cascadia Mono",Menlo,Consolas,monospace;font-size:.98rem;overflow-wrap:anywhere}
+.row.res .v{font-weight:700;color:var(--good)}
+.row.res .k{color:var(--good)}
+.note{margin:6px 0 0;font-size:.9rem;color:var(--muted)}
+.v var{font-style:normal;color:var(--accent);font-weight:700}
+
+/* tables */
+.tbl-scroll{overflow-x:auto;max-height:420px;overflow-y:auto;border:1px solid var(--border);border-radius:8px}
+table{border-collapse:collapse;width:100%;font-size:.92rem}
+th,td{text-align:left;padding:7px 12px;border-bottom:1px solid var(--border);white-space:nowrap}
+th{position:sticky;top:0;background:var(--surface2);font-weight:650;font-size:.85rem;color:var(--muted);z-index:1}
+td.m,th.m{text-align:right;font-variant-numeric:tabular-nums}
+tr.on td{background:var(--accent-soft)}
+tr.cur td{background:var(--accent-soft);font-weight:650}
+.sym{
+  display:inline-block;min-width:30px;text-align:center;padding:1px 6px;margin-right:3px;border-radius:5px;
+  font-family:ui-monospace,Menlo,Consolas,monospace;font-size:.84rem;font-weight:700;border:1px solid var(--border);background:var(--surface2)
+}
+.sym.p{color:var(--pos)}.sym.n{color:var(--neg)}.sym.z{color:var(--zero)}
+.two{display:grid;grid-template-columns:1fr 1fr;gap:16px}
+@media (max-width:820px){.two{grid-template-columns:1fr}}
+ul.tidy{margin:6px 0 0;padding-left:20px}
+ul.tidy li{margin:3px 0}
+.good li::marker{color:var(--good)}.warn li::marker{color:var(--neg)}
+details{margin-top:10px}
+summary{cursor:pointer;font-weight:600;color:var(--accent)}
+.map{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:4px 14px;margin-top:8px;font-family:ui-monospace,Menlo,Consolas,monospace;font-size:.88rem}
+.faded{opacity:.45}
+@media (prefers-reduced-motion:reduce){*{transition:none!important}}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1>Line Coding Lab</h1>
+  <p class="lede">Pick an encoding scheme, type a bit sequence and a transmission time, and see how the data rate, signal elements and baud rate come out, with every calculation shown and the waveform drawn to scale.</p>
+
+  <section class="card" aria-label="Controls">
+    <span class="lbl" id="enc-label">Encoding scheme</span>
+    <div class="enc-row" role="group" aria-labelledby="enc-label" id="encRow"></div>
+
+    <div class="inputs">
+      <div>
+        <label for="bits">Binary sequence <span class="hint">(0s and 1s, spaces allowed)</span></label>
+        <input type="text" id="bits" value="10001011" inputmode="numeric" autocomplete="off" spellcheck="false" aria-describedby="bitsErr">
+        <div class="chips" id="chips"></div>
+        <div class="err" id="bitsErr" role="alert"></div>
+      </div>
+      <div>
+        <label for="time">Transmission time</label>
+        <div class="time-row">
+          <input type="number" id="time" value="1" min="0" step="any" inputmode="decimal">
+          <select id="unit" aria-label="Time unit">
+            <option value="1">seconds</option>
+            <option value="0.001">milliseconds</option>
+            <option value="0.000001">microseconds</option>
+          </select>
+        </div>
+        <div class="err" id="timeErr" role="alert"></div>
+      </div>
+    </div>
+
+    <div class="opts">
+      <div class="opt" id="optNrzl">
+        <span class="lbl">NRZ-L convention</span>
+        <div class="seg" role="group" aria-label="NRZ-L convention" data-key="nrzl">
+          <button type="button" data-v="1low">1 = low, 0 = high</button>
+          <button type="button" data-v="1high">1 = high, 0 = low</button>
+        </div>
+      </div>
+      <div class="opt" id="optInit">
+        <span class="lbl" id="initLabel">Starting level</span>
+        <div class="seg" role="group" aria-labelledby="initLabel" data-key="init">
+          <button type="button" data-v="low">Low (−V)</button>
+          <button type="button" data-v="high">High (+V)</button>
+        </div>
+      </div>
+      <div class="opt" id="optAmi">
+        <span class="lbl">Polarity of the first 1</span>
+        <div class="seg" role="group" aria-label="First 1 polarity" data-key="ami">
+          <button type="button" data-v="pos">Positive (+V)</button>
+          <button type="button" data-v="neg">Negative (−V)</button>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section class="stats" aria-live="polite" aria-label="Results">
+    <div class="stat r"><div class="name">Data rate (R)</div><div class="big mono" id="sR">—</div><div class="sub" id="sRsub">bits per second</div></div>
+    <div class="stat e"><div class="name">Signal elements (E)</div><div class="big mono" id="sE">—</div><div class="sub" id="sEsub">&nbsp;</div></div>
+    <div class="stat d"><div class="name">Baud rate (D)</div><div class="big mono" id="sD">—</div><div class="sub" id="sDsub">signal elements per second</div></div>
+  </section>
+
+  <section class="card plot-card" aria-label="Waveform">
+    <h2 id="plotTitle">Waveform</h2>
+    <div class="plot-scroll" id="plotHost"></div>
+    <p class="caption" id="plotCap"></p>
+  </section>
+
+  <section class="card" aria-label="Step-by-step working">
+    <h2>Step-by-step working</h2>
+    <div id="steps"></div>
+  </section>
+
+  <div class="two">
+    <section class="card" aria-label="Bit by bit">
+      <h2>Bit-by-bit encoding</h2>
+      <p class="note" style="margin-top:-6px;margin-bottom:10px">Hover a row to highlight it in the waveform, or hover the waveform to find its row.</p>
+      <div class="tbl-scroll"><table id="bitTable"></table></div>
+      <div id="mapBox"></div>
+    </section>
+    <section class="card" aria-label="Comparison">
+      <h2>Same input, every scheme</h2>
+      <p class="note" style="margin-top:-6px;margin-bottom:10px">Data rate stays the same, but baud rate depends on how many signal elements each scheme needs.</p>
+      <div class="tbl-scroll"><table id="cmpTable"></table></div>
+      <div id="insight"></div>
+    </section>
+  </div>
+</div>
+
+<script>
+(function(){
+  "use strict";
+  var $ = function(id){return document.getElementById(id)};
+  var MINUS = "\u2212";
+
+  var KEYS = ["nrzl","nrzi","manchester","diffman","ami","4b5b"];
+  var INFO = {
+    nrzl:{name:"NRZ-L", long:"Non-Return-to-Zero Level", mult:1},
+    nrzi:{name:"NRZI", long:"Non-Return-to-Zero Inverted", mult:1},
+    manchester:{name:"Manchester", long:"Manchester (IEEE 802.3)", mult:2},
+    diffman:{name:"Differential Manchester", long:"Differential Manchester", mult:2},
+    ami:{name:"Bipolar-AMI", long:"Bipolar Alternate Mark Inversion", mult:1},
+    "4b5b":{name:"4B/5B", long:"4B/5B block code with NRZI", mult:null}
+  };
+
+  var T45 = {
+    "0000":"11110","0001":"01001","0010":"10100","0011":"10101",
+    "0100":"01010","0101":"01011","0110":"01110","0111":"01111",
+    "1000":"10010","1001":"10011","1010":"10110","1011":"10111",
+    "1100":"11010","1101":"11011","1110":"11100","1111":"11101"
+  };
+
+  var state = {enc:"manchester", nrzl:"1low", init:"low", ami:"pos"};
+  var MAXBITS = 128;
+
+  /* ---------- helpers ---------- */
+  function fmt(x,d){
+    if(d===undefined) d=4;
+    if(!isFinite(x)) return "—";
+    var f=Math.pow(10,d), r=Math.round(x*f)/f;
+    return r.toLocaleString("en-US",{maximumFractionDigits:d});
+  }
+  function lvName(l){return l>0?"+V":(l<0?MINUS+"V":"0")}
+  function lvClass(l){return l>0?"p":(l<0?"n":"z")}
+  function symHTML(els){
+    return els.map(function(l){return '<span class="sym '+lvClass(l)+'">'+lvName(l)+'</span>'}).join("");
+  }
+  function unitLabel(f){return f===1?"s":(f===0.001?"ms":"µs")}
+
+  /* ---------- encoders: return array of blocks ---------- */
+  function encode(key,bits,o){
+    var blocks=[], i, b, L;
+    var init = o.init==="high"?1:-1;
+    if(key==="nrzl"){
+      var one = o.nrzl==="1low"?-1:1;
+      for(i=0;i<bits.length;i++){
+        b=bits[i]; L=(b==="1")?one:-one;
+        blocks.push({label:b, els:[L],
+          rule: b+" \u2192 "+(L>0?"high (+V)":"low ("+MINUS+"V)")+" for the whole bit"});
+      }
+    } else if(key==="nrzi"){
+      var prev=init;
+      for(i=0;i<bits.length;i++){
+        b=bits[i];
+        if(b==="1"){prev=-prev; blocks.push({label:b, els:[prev], rule:"1 \u2192 transition at start of bit, now "+lvName(prev)});}
+        else{blocks.push({label:b, els:[prev], rule:"0 \u2192 no transition, stay "+lvName(prev)});}
+      }
+    } else if(key==="manchester"){
+      for(i=0;i<bits.length;i++){
+        b=bits[i];
+        if(b==="1") blocks.push({label:b, els:[-1,1], rule:"1 \u2192 low-to-high transition in mid-bit"});
+        else blocks.push({label:b, els:[1,-1], rule:"0 \u2192 high-to-low transition in mid-bit"});
+      }
+    } else if(key==="diffman"){
+      var p=init;
+      for(i=0;i<bits.length;i++){
+        b=bits[i];
+        var first = (b==="0")?-p:p;
+        var second = -first;
+        blocks.push({label:b, els:[first,second],
+          rule: (b==="0"?"0 \u2192 transition at start of bit":"1 \u2192 no transition at start of bit")+", then a mid-bit transition"});
+        p=second;
+      }
+    } else if(key==="ami"){
+      var pol = o.ami==="pos"?1:-1;
+      for(i=0;i<bits.length;i++){
+        b=bits[i];
+        if(b==="1"){blocks.push({label:b, els:[pol], rule:"1 \u2192 "+lvName(pol)+" (polarity alternates for each 1)"}); pol=-pol;}
+        else blocks.push({label:b, els:[0], rule:"0 \u2192 zero level (0 V)"});
+      }
+    } else if(key==="4b5b"){
+      var padN=(4-bits.length%4)%4;
+      var padded=bits+new Array(padN+1).join("0");
+      var cur=init;
+      for(i=0;i<padded.length;i+=4){
+        var nib=padded.substr(i,4), code=T45[nib], els=[];
+        for(var c=0;c<5;c++){
+          if(code[c]==="1") cur=-cur;
+          els.push(cur);
+        }
+        var isLast = (i+4>=padded.length);
+        blocks.push({label:nib, sub:code.split(""), els:els,
+          rule: nib+" \u2192 "+code+", sent as NRZI (1 = flip level)"+(isLast&&padN?" (includes "+padN+" padding 0"+(padN>1?"s":"")+")":"")});
+      }
+    }
+    return blocks;
+  }
+
+  function elementsFor(key,N){
+    if(key==="4b5b") return Math.ceil(N/4)*5;
+    return N*INFO[key].mult;
+  }
+
+  /* ---------- UI construction ---------- */
+  function buildEncButtons(){
+    var row=$("encRow");
+    KEYS.forEach(function(k){
+      var b=document.createElement("button");
+      b.type="button"; b.className="enc"; b.dataset.k=k; b.textContent=INFO[k].name;
+      b.setAttribute("aria-pressed", k===state.enc?"true":"false");
+      b.addEventListener("click",function(){state.enc=k; update();});
+      row.appendChild(b);
+    });
+  }
+  function buildChips(){
+    var box=$("chips");
+    var span=document.createElement("span"); span.className="hint"; span.textContent="Try:"; box.appendChild(span);
+    ["10001011","11110000","10101010","00000000","11111111","01100110"].forEach(function(s){
+      var b=document.createElement("button"); b.type="button"; b.className="chip"; b.textContent=s;
+      b.addEventListener("click",function(){$("bits").value=s; update();});
+      box.appendChild(b);
+    });
+    var r=document.createElement("button"); r.type="button"; r.className="chip"; r.textContent="random 8 bits";
+    r.addEventListener("click",function(){
+      var s=""; for(var i=0;i<8;i++) s+=Math.random()<.5?"0":"1";
+      $("bits").value=s; update();
+    });
+    box.appendChild(r);
+  }
+  function wireSeg(){
+    document.querySelectorAll(".seg").forEach(function(seg){
+      seg.addEventListener("click",function(e){
+        var btn=e.target.closest("button"); if(!btn) return;
+        state[seg.dataset.key]=btn.dataset.v; update();
+      });
+    });
+  }
+
+  /* ---------- plot ---------- */
+  function drawPlot(blocks,Tsec,unitF,E){
+    var host=$("plotHost");
+    var hasSub=blocks.some(function(b){return b.sub});
+    var padL=46,padR=18;
+    var top=hasSub?64:42;
+    var plotH=128;
+    var yP=top+16, yZ=top+64, yN=top+112;
+    var axisY=top+plotH+8;
+    var H=axisY+44;
+    var avail=Math.max(300,host.clientWidth||600);
+    var ew=Math.max(30,(avail-padL-padR)/E);
+    var W=padL+padR+ew*E;
+    function Y(l){return l>0?yP:(l<0?yN:yZ)}
+
+    var s='<svg xmlns="http://www.w3.org/2000/svg" width="'+W+'" height="'+H+'" viewBox="0 0 '+W+' '+H+'" role="img" aria-label="Waveform of the encoded signal">';
+    // level lines + labels
+    [[yP,"+V"],[yZ,"0"],[yN,MINUS+"V"]].forEach(function(a){
+      s+='<line class="lvl" x1="'+padL+'" x2="'+(W-padR)+'" y1="'+a[0]+'" y2="'+a[0]+'"/>';
+      s+='<text class="muted" x="'+(padL-8)+'" y="'+(a[0]+4)+'" text-anchor="end" font-size="12">'+a[1]+'</text>';
+    });
+    // element boundaries
+    var idx=0, starts=[];
+    blocks.forEach(function(b){starts.push(idx); idx+=b.els.length;});
+    for(var i=0;i<=E;i++){
+      var x=padL+i*ew;
+      s+='<line class="el" x1="'+x+'" x2="'+x+'" y1="'+(top-2)+'" y2="'+axisY+'"/>';
+    }
+    // block boundaries + highlight rects + labels
+    blocks.forEach(function(b,bi){
+      var x0=padL+starts[bi]*ew, w=b.els.length*ew;
+      s+='<rect class="hlrect" data-b="'+bi+'" x="'+x0+'" y="'+(top-6)+'" width="'+w+'" height="'+(axisY-top+6)+'"/>';
+      s+='<line class="bl" x1="'+x0+'" x2="'+x0+'" y1="'+(top-6)+'" y2="'+axisY+'"/>';
+      s+='<text x="'+(x0+w/2)+'" y="22" text-anchor="middle" font-size="'+(b.sub?15:16)+'" font-weight="700">'+b.label+'</text>';
+      if(b.sub){
+        b.sub.forEach(function(c,ci){
+          s+='<text class="muted" x="'+(x0+(ci+.5)*ew)+'" y="'+(top-14)+'" text-anchor="middle" font-size="12">'+c+'</text>';
+        });
+      }
+    });
+    var xe=padL+E*ew;
+    s+='<line class="bl" x1="'+xe+'" x2="'+xe+'" y1="'+(top-6)+'" y2="'+axisY+'"/>';
+    // trace
+    var flat=[]; blocks.forEach(function(b){b.els.forEach(function(l){flat.push(l)})});
+    var d="M"+padL+","+Y(flat[0]);
+    for(var j=0;j<flat.length;j++){
+      var xr=padL+(j+1)*ew;
+      d+=" H"+xr;
+      if(j+1<flat.length && flat[j+1]!==flat[j]) d+=" V"+Y(flat[j+1]);
+    }
+    s+='<path class="trace" d="'+d+'"/>';
+    // axis
+    s+='<line class="axis" x1="'+padL+'" x2="'+xe+'" y1="'+axisY+'" y2="'+axisY+'"/>';
+    var bw=ew*(E/blocks.length);
+    var step=Math.max(1,Math.ceil(62/bw));
+    for(var k=0;k<=blocks.length;k++){
+      var xt=padL+(k<blocks.length?starts[k]:E)*ew;
+      s+='<line class="axis" x1="'+xt+'" x2="'+xt+'" y1="'+axisY+'" y2="'+(axisY+5)+'"/>';
+      if(k%step===0 || k===blocks.length){
+        var tv=(Tsec*((k<blocks.length?starts[k]:E)/E))/unitF;
+        // avoid overlapping final label with the previous one
+        if(k===blocks.length && k%step!==0 && (blocks.length-(k-k%step))<step*0.6) continue;
+        s+='<text class="muted" x="'+xt+'" y="'+(axisY+19)+'" text-anchor="middle" font-size="11">'+fmt(tv,3)+'</text>';
+      }
+    }
+    s+='<text class="muted" x="'+xe+'" y="'+(axisY+36)+'" text-anchor="end" font-size="11">time ('+unitLabel(unitF)+')</text>';
+    s+='</svg>';
+    host.innerHTML=s;
+  }
+
+  /* ---------- steps ---------- */
+  function step(n,title,rows,note){
+    var h='<div class="step"><div class="sn">'+n+'</div><div class="sb"><h3>'+title+'</h3>';
+    rows.forEach(function(r){h+='<div class="row '+(r[2]||"")+'"><span class="k">'+r[0]+'</span><span class="v">'+r[1]+'</span></div>';});
+    if(note) h+='<p class="note">'+note+'</p>';
+    return h+'</div></div>';
+  }
+
+  var ELEMENT_WHY = {
+    nrzl:"Each bit is one voltage level held for the whole bit time, so one bit produces one signal element.",
+    nrzi:"Each bit is one level held for the whole bit time (the level may flip at the start), so one bit produces one signal element.",
+    manchester:"Every bit is split into two halves with a forced transition in the middle. Each half is its own signal element, so one bit produces two elements.",
+    diffman:"Every bit has a forced mid-bit transition, so each bit is made of two halves. Each half is a signal element, so one bit produces two elements.",
+    ami:"Each bit is a single element: a 0 is a zero-volt element and a 1 is a +V or "+MINUS+"V pulse. One bit produces one signal element.",
+    "4b5b":"Data is cut into 4-bit groups. Each group is replaced by a 5-bit code from a fixed table, and each of those 5 code bits is sent as one NRZI signal element."
+  };
+  var TAKE = {
+    nrzl:{good:["Simplest scheme: baud rate equals data rate.","Uses the full bandwidth efficiently."],
+          bad:["A long run of identical bits gives no transitions, so the receiver can lose clock sync.","Polarity errors invert every bit."]},
+    nrzi:{good:["Baud rate equals data rate.","Decoding looks at transitions, so swapped wires do not matter."],
+          bad:["A long run of 0s gives no transitions and loses sync (runs of 1s are fine)."]},
+    manchester:{good:["A transition in every bit, so the clock can be recovered from the signal (self-clocking).","No DC component, and errors are easy to detect."],
+          bad:["Needs two signal elements per bit, so the baud rate is double the data rate.","Needs about twice the bandwidth of NRZ."]},
+    diffman:{good:["Self-clocking thanks to the mid-bit transition.","Detects transitions, so swapped wires do not matter."],
+          bad:["Baud rate is double the data rate, like Manchester.","Needs about twice the bandwidth of NRZ."]},
+    ami:{good:["Baud rate equals data rate, with three signal levels.","Alternating polarity removes the DC component and gives simple error detection."],
+          bad:["A long run of 0s gives a flat line and loses sync.","Three levels need a better signal-to-noise ratio."]},
+    "4b5b":{good:["Every 5-bit code has few enough leading and trailing zeros that NRZI always produces enough transitions.","Overhead is only 25%, much less than Manchester's 100%."],
+          bad:["Baud rate is 1.25 times the data rate.","Data length that is not a multiple of 4 must be padded."]}
+  };
+
+  function buildSteps(c){
+    var info=INFO[c.key], h="";
+    var n=1;
+    if(c.unitF!==1){
+      h+=step(n++,"Convert the time to seconds",[
+        ["Rule","1 "+unitLabel(c.unitF)+" = "+fmt(c.unitF,9)+" s"],
+        ["Substitute","<var>T</var> = "+fmt(c.tRaw,6)+" "+unitLabel(c.unitF)+" \u00d7 "+fmt(c.unitF,9)],
+        ["Result","<var>T</var> = "+fmt(c.T,9)+" s","res"]
+      ]);
+    }
+    h+=step(n++,"Count the data bits",[
+      ["Input",'<var>'+c.bits+'</var>'],
+      ["Result","<var>N</var> = "+c.N+" bit"+(c.N===1?"":"s"),"res"]
+    ]);
+    h+=step(n++,"Data rate (bits per second)",[
+      ["Formula","<var>R</var> = <var>N</var> \u00f7 <var>T</var>"],
+      ["Substitute","<var>R</var> = "+c.N+" bits \u00f7 "+fmt(c.T,9)+" s"],
+      ["Result","<var>R</var> = "+fmt(c.R)+" bps","res"]
+    ],"The data rate counts the bits you typed, no matter which encoding is chosen.");
+    var eRows;
+    if(c.key==="4b5b"){
+      var g=Math.ceil(c.N/4);
+      eRows=[["Rule","Each 4-bit group becomes 5 signal elements"],
+             ["Formula","<var>E</var> = \u2308<var>N</var> \u00f7 4\u2309 \u00d7 5"],
+             ["Substitute","<var>E</var> = \u2308"+c.N+" \u00f7 4\u2309 \u00d7 5 = "+g+" \u00d7 5"],
+             ["Result","<var>E</var> = "+c.E+" signal elements","res"]];
+    } else {
+      eRows=[["Rule",info.mult+" signal element"+(info.mult>1?"s":"")+" per bit"],
+             ["Formula","<var>E</var> = <var>N</var> \u00d7 "+info.mult],
+             ["Substitute","<var>E</var> = "+c.N+" \u00d7 "+info.mult],
+             ["Result","<var>E</var> = "+c.E+" signal elements","res"]];
+    }
+    var eNote=ELEMENT_WHY[c.key];
+    if(c.key==="4b5b" && c.padN) eNote+=" Your "+c.N+" bits are not a multiple of 4, so "+c.padN+" zero"+(c.padN>1?"s were":" was")+" added to finish the last group. The data rate still uses your original "+c.N+" bits.";
+    h+=step(n++,"Number of signal elements",eRows,eNote);
+    h+=step(n++,"Baud rate (signal elements per second)",[
+      ["Formula","<var>D</var> = <var>E</var> \u00f7 <var>T</var>"],
+      ["Substitute","<var>D</var> = "+c.E+" elements \u00f7 "+fmt(c.T,9)+" s"],
+      ["Result","<var>D</var> = "+fmt(c.D)+" baud","res"]
+    ]);
+    var r=c.N/c.E;
+    h+=step(n++,"Cross-check with bits per signal element",[
+      ["Formula","<var>r</var> = <var>N</var> \u00f7 <var>E</var>  and  <var>D</var> = <var>R</var> \u00f7 <var>r</var>"],
+      ["Substitute","<var>r</var> = "+c.N+" \u00f7 "+c.E+" = "+fmt(r)+"  \u2192  <var>D</var> = "+fmt(c.R)+" \u00f7 "+fmt(r)],
+      ["Result","<var>D</var> = "+fmt(c.R/r)+" baud","res"]
+    ],"Baud rate is "+(Math.abs(c.D-c.R)<1e-9?"equal to the data rate here because each signal element carries exactly one bit.":(c.D>c.R?"higher than the data rate because each signal element carries only "+fmt(r)+" bit of data.":"lower than the data rate because each signal element carries more than one bit.")));
+    $("steps").innerHTML=h;
+  }
+
+  function buildTable(blocks){
+    var h='<thead><tr><th class="m">#</th><th>Input</th><th>Rule applied</th><th>Signal elements</th></tr></thead><tbody>';
+    blocks.forEach(function(b,i){
+      h+='<tr data-b="'+i+'"><td class="m">'+(i+1)+'</td><td class="mono"><b>'+b.label+'</b></td><td>'+b.rule+'</td><td>'+symHTML(b.els)+'</td></tr>';
+    });
+    $("bitTable").innerHTML=h+'</tbody>';
+  }
+
+  function buildCompare(N,T,cur){
+    var h='<thead><tr><th>Scheme</th><th class="m">R (bps)</th><th class="m">E</th><th class="m">D (baud)</th><th class="m">r (bits/elem.)</th></tr></thead><tbody>';
+    KEYS.forEach(function(k){
+      var E=elementsFor(k,N), D=E/T;
+      h+='<tr class="'+(k===cur?"cur":"")+'"><td>'+INFO[k].name+'</td><td class="m">'+fmt(N/T)+'</td><td class="m">'+E+'</td><td class="m">'+fmt(D)+'</td><td class="m">'+fmt(N/E)+'</td></tr>';
+    });
+    $("cmpTable").innerHTML=h+'</tbody>';
+  }
+
+  /* ---------- main update ---------- */
+  function setEmpty(msg){
+    ["sR","sE","sD"].forEach(function(i){$(i).textContent="—"});
+    $("sRsub").textContent="bits per second";
+    $("sEsub").innerHTML="&nbsp;";
+    $("sDsub").textContent="signal elements per second";
+    $("plotHost").innerHTML='<div class="empty">'+msg+'</div>';
+    $("plotCap").textContent="";
+    $("steps").innerHTML='<div class="empty">'+msg+'</div>';
+    $("bitTable").innerHTML="";
+    $("cmpTable").innerHTML="";
+    $("insight").innerHTML="";
+    $("mapBox").innerHTML="";
+  }
+
+  function update(){
+    // sync controls
+    document.querySelectorAll(".enc").forEach(function(b){b.setAttribute("aria-pressed",b.dataset.k===state.enc?"true":"false")});
+    document.querySelectorAll(".seg").forEach(function(seg){
+      seg.querySelectorAll("button").forEach(function(b){b.setAttribute("aria-pressed",b.dataset.v===state[seg.dataset.key]?"true":"false")});
+    });
+    var key=state.enc;
+    $("optNrzl").hidden = key!=="nrzl";
+    $("optInit").hidden = !(key==="nrzi"||key==="diffman"||key==="4b5b");
+    $("optAmi").hidden = key!=="ami";
+    $("initLabel").textContent = key==="diffman"?"Level before the first bit":"Starting level";
+    var anyOpt = !($("optNrzl").hidden && $("optInit").hidden && $("optAmi").hidden);
+    document.querySelector(".opts").style.display = anyOpt?"flex":"none";
+
+    // validate
+    var raw=$("bits").value, bits=raw.replace(/[\s_,\-]/g,"");
+    var bitsOK=true, bitsMsg="";
+    if(bits.length===0){bitsOK=false;bitsMsg="Enter at least one bit, for example 10001011.";}
+    else if(/[^01]/.test(bits)){bitsOK=false;bitsMsg="Use only 0 and 1. Remove any other characters.";}
+    else if(bits.length>MAXBITS){bitsOK=false;bitsMsg="Use at most "+MAXBITS+" bits so the waveform stays readable.";}
+    $("bits").classList.toggle("invalid",!bitsOK);
+    $("bitsErr").textContent=bitsMsg;
+
+    var unitF=parseFloat($("unit").value), tRaw=parseFloat($("time").value);
+    var timeOK=isFinite(tRaw)&&tRaw>0, timeMsg="";
+    if(!timeOK) timeMsg=$("time").value===""?"Enter a transmission time greater than 0.":"Transmission time must be greater than 0.";
+    $("time").classList.toggle("invalid",!timeOK);
+    $("timeErr").textContent=timeMsg;
+
+    if(!bitsOK||!timeOK){setEmpty("Fix the highlighted input to see the results."); return;}
+
+    var T=tRaw*unitF, N=bits.length;
+    var blocks=encode(key,bits,state);
+    var E=blocks.reduce(function(a,b){return a+b.els.length},0);
+    var R=N/T, D=E/T;
+    var padN=key==="4b5b"?(4-N%4)%4:0;
+    var ctx={key:key,bits:bits,N:N,E:E,T:T,R:R,D:D,tRaw:tRaw,unitF:unitF,padN:padN};
+
+    // stats
+    $("sR").innerHTML=fmt(R)+"<small>bps</small>";
+    $("sRsub").textContent=R>=1000?"\u2248 "+fmt(R/1000)+" kbps":"bits per second";
+    $("sE").textContent=fmt(E,0);
+    $("sEsub").textContent=(key==="4b5b"?"5 elements per 4-bit group":INFO[key].mult+" element"+(INFO[key].mult>1?"s":"")+" per bit")+" ("+INFO[key].name+")";
+    $("sD").innerHTML=fmt(D)+"<small>baud</small>";
+    $("sDsub").textContent=D>=1000?"\u2248 "+fmt(D/1000)+" kilobaud (symbols/sec)":"symbols (signal elements) per second";
+
+    // plot
+    $("plotTitle").textContent=INFO[key].long+" waveform";
+    drawPlot(blocks,T,unitF,E);
+    var elT=T/E/unitF;
+    $("plotCap").innerHTML="Total time <b>"+fmt(tRaw,6)+" "+unitLabel(unitF)+"</b> split into <b>"+E+"</b> equal signal elements, so one element lasts <b>"+fmt(elT,6)+" "+unitLabel(unitF)+"</b>."+
+      (key==="4b5b"?" Top row: your data in 4-bit groups. Second row: the 5-bit code sent for each group.":"");
+
+    buildSteps(ctx);
+    buildTable(blocks);
+    buildCompare(N,T,key);
+
+    // 4B/5B table
+    var mb="";
+    if(key==="4b5b"){
+      var used={}; blocks.forEach(function(b){used[b.label]=1});
+      mb='<details><summary>Show the full 4B/5B table</summary><div class="map">';
+      Object.keys(T45).forEach(function(k){
+        mb+='<span class="'+(used[k]?"":"faded")+'">'+k+" \u2192 "+T45[k]+"</span>";
+      });
+      mb+='</div></details>';
+    }
+    $("mapBox").innerHTML=mb;
+
+    // takeaways
+    var t=TAKE[key], ins='<h3 style="margin-top:14px">What to notice about '+INFO[key].name+'</h3>';
+    ins+='<ul class="tidy good">'+t.good.map(function(x){return "<li>"+x+"</li>"}).join("")+"</ul>";
+    ins+='<ul class="tidy warn">'+t.bad.map(function(x){return "<li>"+x+"</li>"}).join("")+"</ul>";
+    $("insight").innerHTML=ins;
+  }
+
+  /* ---------- hover link between plot and table ---------- */
+  function highlight(i){
+    document.querySelectorAll("[data-b]").forEach(function(el){
+      el.classList.toggle("on", String(el.getAttribute("data-b"))===String(i));
+    });
+  }
+  ["plotHost","bitTable"].forEach(function(id){
+    var el=$(id);
+    el.addEventListener("mouseover",function(e){
+      var t=e.target.closest("[data-b]"); highlight(t?t.getAttribute("data-b"):-1);
+    });
+    el.addEventListener("mouseleave",function(){highlight(-1)});
+    el.addEventListener("click",function(e){
+      var t=e.target.closest("[data-b]"); if(t) highlight(t.getAttribute("data-b"));
+    });
+  });
+
+  /* ---------- init ---------- */
+  buildEncButtons(); buildChips(); wireSeg();
+  $("bits").addEventListener("input",update);
+  $("time").addEventListener("input",update);
+  $("unit").addEventListener("change",update);
+  var rz; window.addEventListener("resize",function(){clearTimeout(rz); rz=setTimeout(update,120);});
+  update();
+})();
+</script>
+</body>
+</html>
