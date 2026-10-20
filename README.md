@@ -1,6 +1,10 @@
 # line-coding-lab
 Pick an encoding scheme, type a bit sequence and a transmission time, and see how the data rate, signal elements and baud rate come out, with every calculation shown and the waveform drawn to scale.
 
+
+To access the webpage: https://jyhtonix.github.io/line-coding-lab/
+
+
 # Bit Rate vs Baud Rate in Line Encoding
 
 A quick reference for understanding the difference between **bit rate (bps)** and **baud rate (baud)**, and how each line/block encoding scheme affects the relationship between them.
